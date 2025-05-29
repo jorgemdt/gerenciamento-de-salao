@@ -89,35 +89,3 @@ class ReportView:
     def destroy(self):
         """Destroi a janela de relatório."""
         self.window.destroy()
-
-
-# Bloco Teste
-if __name__ == '__main__':
-    root = tk.Tk()
-    root.withdraw() # Esconde a janela raiz
-
-    # Dados de teste (simulando o que viria do Model)
-    test_data = [
-        (1, "Ana Silva", "111-1111", "ana@a.com", "2025-06-15 10:00", 50.00, "Corte"),
-        (2, "Bruno Costa", "222-2222", "bruno@b.com", "2025-06-15 11:30", 35.00, "Manicure"),
-        (3, "Carla Dias", "333-3333", "carla@c.com", "2025-06-16 14:00", 120.00, "Luzes"),
-        (4, "Daniel Souza", "444-4444", "daniel@d.com", "2025-06-17 09:00", 40.00, "Barba"),
-        (5, "Eliana Lima", "555-5555", "eliana@e.com", "2025-06-17 15:00", 70.00, "Pedicure e Manicure"),
-        (6, "Fernando Reis", "666-6666", "fernando@f.com", "2025-06-18 16:00", 50.00, "Corte Masculino"),
-    ] 
-
-    # Instancia a ReportView (passando None para controller, pois não é usado no teste)
-    report_view = ReportView(root, None)
-
-    # Popula com os dados de teste
-    report_view.populate_report(test_data)
-
-    # Define o que fazer ao fechar a janela no modo de teste
-    report_view.window.protocol("WM_DELETE_WINDOW", root.destroy)
-
-    # Mostra a janela
-    report_view.show()
-
-    # Inicia o loop do Tkinter
-    root.mainloop()
-    print("Janela de relatório fechada.")
