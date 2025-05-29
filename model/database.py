@@ -79,11 +79,3 @@ def setup_database():
         print("Configuração do banco de dados concluída.")
     else:
         print("Erro! Não foi possível criar uma conexão com o banco de dados.")
-
-# --- Teste ---
-# Se você executar este arquivo diretamente (python model/database.py),
-# ele vai tentar configurar o banco de dados.
-if __name__ == '__main__':
-    print("Executando setup_database() para teste...")
-    setup_database()
-    print("Teste concluído.")
