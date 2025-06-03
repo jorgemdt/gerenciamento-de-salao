@@ -6,19 +6,21 @@ class MainView:
     def __init__(self, master, controller):
         self.master = master
         self.controller = controller
-        self.master.title("Gerenciamento de Agendamentos - Salão de Beleza")
-        self.master.geometry("800x600+100+100") # Ajuste conforme necessário
+        self.master.title("Agendamentos - Salão de Beleza Neide Leila")
+        self.master.geometry("800x650+100+100") # Aumentei um pouco a altura
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # --- StringVars para campos com formatação especial ---
         self.data_var = tk.StringVar()
-        self._data_var_trace_active = True # Flag para controle de recursão no trace
+        self.horario_var = tk.StringVar() # Nova StringVar para Horário
+        self._data_var_trace_active = True
+        self._horario_var_trace_active = True # Flag para Horário
 
         # --- Registrando Comandos de Validação ---
         self.vcmd_digits = (self.master.register(self._validate_digits_only), '%P')
         self.vcmd_decimal = (self.master.register(self._validate_decimal_input), '%P')
-        # Alterado: vcmd_date_action agora usa _validate_date_action e passa %d (action_code) e %S (text_being_inserted)
         self.vcmd_date_action = (self.master.register(self._validate_date_action), '%d', '%S')
+        self.vcmd_time_action = (self.master.register(self._validate_time_action), '%d', '%S')
 
 
         self.form_frame = ttk.LabelFrame(self.master, text="Dados do Agendamento", padding="10")
@@ -28,7 +30,9 @@ class MainView:
         self.list_frame.pack(pady=10, padx=10, expand=True, fill=tk.BOTH)
 
         self._create_widgets()
+        # Adicionando traces
         self.data_var.trace_add('write', self._format_date_trace)
+        self.horario_var.trace_add('write', self._format_time_trace) # Trace para Horário
 
     # --- Funções de Validação e Formatação ---
     def _validate_digits_only(self, P):
@@ -38,85 +42,106 @@ class MainView:
         if P == "": return True
         return all(char.isdigit() or char == '.' for char in P) and P.count('.') <= 1
 
-    # Renomeada e modificada para usar action_code (%d)
     def _validate_date_action(self, action_code, text_being_inserted):
-        """
-        Valida a ação no campo de data.
-        action_code: '0' para delete, '1' para insert, '-1' para outros.
-        text_being_inserted: O texto sendo inserido (para action_code '1').
-        """
-        if action_code == '0':  # Ação de Deletar (Backspace, Delete)
-            return True         # Sempre permite a deleção, o trace fará a reformatação
-
-        if action_code == '1':  # Ação de Inserir
-            # Permite apenas que dígitos sejam inseridos diretamente pelo usuário
-            if not text_being_inserted.isdigit():
-                # self.master.bell() # Opcional: Som de erro se caractere não for dígito
-                return False
-
-            # Verifica se a inserção do(s) dígito(s) excederia 8 dígitos no total
-            # self.data_var.get() contém o texto ANTES da inserção atual
+        if action_code == '0': return True
+        if action_code == '1':
+            if not text_being_inserted.isdigit(): return False
             current_digits_in_var = "".join(filter(str.isdigit, self.data_var.get()))
             num_new_digits = len("".join(filter(str.isdigit, text_being_inserted)))
-
-            if len(current_digits_in_var) + num_new_digits > 8:
-                # self.master.bell() # Opcional: Som de erro se exceder limite
-                return False # Excedeu o limite de 8 dígitos
-            return True # Permite a inserção do dígito
-        
-        return True # Permite outras ações (foco, etc.) que não sejam insert ou delete
+            if len(current_digits_in_var) + num_new_digits > 8: return False
+            return True
+        return True
 
     def _format_date_trace(self, var_name, index, mode):
-        if not self._data_var_trace_active:
-            return
-
-        self._data_var_trace_active = False # Previne recursão
-
-        current_text = self.data_var.get() # Texto após a ação permitida pelo validatecommand
+        if not self._data_var_trace_active: return
+        self._data_var_trace_active = False
+        
+        current_text = self.data_var.get()
         original_digits = "".join(filter(str.isdigit, current_text))
         
         formatted_text = ""
-        if len(original_digits) > 0:
-            formatted_text = original_digits[0:2] # DD
-        if len(original_digits) > 2: # Adiciona '/' apenas se houver dígitos para 'mm'
-            formatted_text += "/" + original_digits[2:4] # MM
-        if len(original_digits) > 4: # Adiciona '/' apenas se houver dígitos para 'aaaa'
-            formatted_text += "/" + original_digits[4:8] # AAAA (até 8 dígitos no total)
+        if len(original_digits) > 0: formatted_text = original_digits[0:2] # DD
+        if len(original_digits) > 2: formatted_text += "/" + original_digits[2:4] # MM
+        if len(original_digits) > 4: formatted_text += "/" + original_digits[4:8] # AAAA (até 8 dígitos no total)
 
         self.data_var.set(formatted_text)
         
-        if self.entries.get("Data"): 
-            self.entries["Data"].icursor(tk.END)
+        entry_widget = self.entries.get("Data")
+        if entry_widget:
+            # Usar after_idle para garantir que o cursor vá para o final
+            entry_widget.after_idle(entry_widget.icursor, tk.END)
 
-        self._data_var_trace_active = True
+        self._data_var_trace_active = True # Reabilita o trace
+
+    def _validate_time_action(self, action_code, text_being_inserted):
+        if action_code == '0': return True
+        if action_code == '1':
+            if not text_being_inserted.isdigit(): return False
+            current_digits_in_var = "".join(filter(str.isdigit, self.horario_var.get()))
+            num_new_digits = len("".join(filter(str.isdigit, text_being_inserted)))
+            if len(current_digits_in_var) + num_new_digits > 4: return False # HHMM = 4 dígitos
+            return True
+        return True
+
+    def _format_time_trace(self, var_name, index, mode):
+        if not self._horario_var_trace_active: return
+        self._horario_var_trace_active = False
+        
+        current_text = self.horario_var.get()
+        original_digits = "".join(filter(str.isdigit, current_text))
+        
+        formatted_text = ""
+        if len(original_digits) > 0: formatted_text = original_digits[0:2] # HH
+        if len(original_digits) > 2: formatted_text += ":" + original_digits[2:4] # MM
+        
+        self.horario_var.set(formatted_text)
+
+        entry_widget = self.entries.get("Horário")
+        if entry_widget:
+            # Usar after_idle para garantir que o cursor vá para o final
+            entry_widget.after_idle(entry_widget.icursor, tk.END)
+            
+        self._horario_var_trace_active = True # Reabilita o trace
 
     def _create_widgets(self):
         self.labels = {}
         self.entries = {}
-        fields = ["Nome", "Telefone", "Email", "Data (DD/MM/AAAA)", "Valor (R$)", "Serviço"]
+        # Atualizando lista de campos
+        fields = ["Nome", "Telefone", "Email", "Data (DD/MM/AAAA)", "Horário (HH:MM)", "Valor (R$)", "Serviço"]
         
-        for i, field in enumerate(fields):
-            label_text = field.split('(')[0].strip()
-            self.labels[label_text] = ttk.Label(self.form_frame, text=f"{field}:")
-            self.labels[label_text].grid(row=i, column=0, padx=5, pady=5, sticky=tk.W)
+        current_row = 0 # Para controlar a linha no grid
+        for field_config in fields:
+            label_text_full = field_config # ex: "Data (DD/MM/AAAA)"
+            label_text_key = field_config.split('(')[0].strip() # ex: "Data"
             
-            if label_text == "Data":
-                self.entries[label_text] = ttk.Entry(self.form_frame, width=40, 
+            self.labels[label_text_key] = ttk.Label(self.form_frame, text=f"{label_text_full}:")
+            self.labels[label_text_key].grid(row=current_row, column=0, padx=5, pady=5, sticky=tk.W)
+            
+            entry_widget = None
+            if label_text_key == "Data":
+                entry_widget = ttk.Entry(self.form_frame, width=40, 
                                                      textvariable=self.data_var,
                                                      validate='key', 
-                                                     validatecommand=self.vcmd_date_action) # Alterado para vcmd_date_action
+                                                     validatecommand=self.vcmd_date_action)
+            elif label_text_key == "Horário": # Novo campo Horário
+                entry_widget = ttk.Entry(self.form_frame, width=40,
+                                                     textvariable=self.horario_var,
+                                                     validate='key',
+                                                     validatecommand=self.vcmd_time_action)
             else:
-                self.entries[label_text] = ttk.Entry(self.form_frame, width=40)
+                entry_widget = ttk.Entry(self.form_frame, width=40)
 
-            self.entries[label_text].grid(row=i, column=1, padx=5, pady=5, sticky=tk.W)
+            entry_widget.grid(row=current_row, column=1, padx=5, pady=5, sticky=tk.W)
+            self.entries[label_text_key] = entry_widget # Armazena a referência
 
-            if label_text == "Telefone":
-                self.entries[label_text].config(validate='key', validatecommand=self.vcmd_digits)
-            elif label_text == "Valor":
-                self.entries[label_text].config(validate='key', validatecommand=self.vcmd_decimal)
+            if label_text_key == "Telefone":
+                entry_widget.config(validate='key', validatecommand=self.vcmd_digits)
+            elif label_text_key == "Valor":
+                entry_widget.config(validate='key', validatecommand=self.vcmd_decimal)
+            current_row += 1
         
         self.form_button_frame = ttk.Frame(self.form_frame)
-        self.form_button_frame.grid(row=len(fields), column=0, columnspan=2, pady=10)
+        self.form_button_frame.grid(row=current_row, column=0, columnspan=2, pady=10) # Usa current_row
 
         self.add_button = ttk.Button(self.form_button_frame, text="Adicionar Novo", command=self._handle_add_click)
         self.save_button = ttk.Button(self.form_button_frame, text="Salvar Alterações", command=self._handle_save_click)
@@ -128,18 +153,18 @@ class MainView:
         self.save_button.config(state=tk.DISABLED)
 
         self.tree = ttk.Treeview(self.list_frame, 
-                                 columns=("ID", "Nome", "Data", "Serviço", "Valor"), 
+                                 columns=("ID", "Nome", "Data/Hora", "Serviço", "Valor"), # Mantido "Data/Hora"
                                  show='headings')
                                  
         self.tree.heading("ID", text="ID")
         self.tree.heading("Nome", text="Nome Cliente")
-        self.tree.heading("Data", text="Data/Hora") 
+        self.tree.heading("Data/Hora", text="Data/Hora") # Label da coluna no Treeview
         self.tree.heading("Serviço", text="Serviço")
         self.tree.heading("Valor", text="Valor (R$)")
 
         self.tree.column("ID", width=40, anchor=tk.CENTER)
         self.tree.column("Nome", width=200)
-        self.tree.column("Data", width=120, anchor=tk.CENTER)
+        self.tree.column("Data/Hora", width=150, anchor=tk.CENTER) # Largura para DD/MM/AAAA HH:MM
         self.tree.column("Serviço", width=150)
         self.tree.column("Valor", width=80, anchor=tk.E)
 
@@ -190,15 +215,19 @@ class MainView:
         for item in self.tree.get_children():
             self.tree.delete(item)
         for row in data:
-            db_date_str = row[4] 
-            display_date_tree = db_date_str 
+            db_datetime_str = row[4] 
+            display_datetime_tree = db_datetime_str 
             try:
-                dt_obj = datetime.strptime(db_date_str.split(" ")[0], "%Y-%m-%d")
-                display_date_tree = dt_obj.strftime("%d/%m/%Y") 
-            except ValueError:
-                pass 
+                dt_obj = datetime.strptime(db_datetime_str, "%Y-%m-%d %H:%M:%S")
+                display_datetime_tree = dt_obj.strftime("%d/%m/%Y %H:%M")
+            except (ValueError, TypeError): 
+                try:
+                    dt_obj = datetime.strptime(db_datetime_str.split(" ")[0], "%Y-%m-%d")
+                    display_datetime_tree = dt_obj.strftime("%d/%m/%Y")
+                except (ValueError, TypeError, AttributeError):
+                    pass 
 
-            display_row = (row[0], row[1], display_date_tree, row[6], f"{row[5]:.2f}") 
+            display_row = (row[0], row[1], display_datetime_tree, row[6], f"{row[5]:.2f}") 
             self.tree.insert("", tk.END, values=display_row, iid=row[0])
 
     def get_form_data(self):
@@ -207,6 +236,7 @@ class MainView:
             "Telefone": self.entries["Telefone"].get(),
             "Email": self.entries["Email"].get(),
             "Data": self.data_var.get(), 
+            "Horário": self.horario_var.get(), 
             "Valor": self.entries["Valor"].get(),
             "Serviço": self.entries["Serviço"].get(),
         }
@@ -217,28 +247,38 @@ class MainView:
         self.entries["Telefone"].insert(0, data_dict_from_controller.get("Telefone", ""))
         self.entries["Email"].insert(0, data_dict_from_controller.get("Email", ""))
         
-        db_date_str = data_dict_from_controller.get("Data", "")
+        db_datetime_str = data_dict_from_controller.get("Data", "") 
         display_date_form = ""
-        if db_date_str:
+        display_time_form = ""
+        if db_datetime_str:
             try:
-                dt_obj = datetime.strptime(db_date_str.split(" ")[0], "%Y-%m-%d")
+                dt_obj = datetime.strptime(db_datetime_str, "%Y-%m-%d %H:%M:%S")
                 display_date_form = dt_obj.strftime("%d/%m/%Y")
-            except ValueError:
-                display_date_form = "Data Inválida" 
-        self.data_var.set(display_date_form) 
+                display_time_form = dt_obj.strftime("%H:%M")
+            except (ValueError, TypeError):
+                try:
+                    dt_obj = datetime.strptime(db_datetime_str.split(" ")[0], "%Y-%m-%d")
+                    display_date_form = dt_obj.strftime("%d/%m/%Y")
+                except (ValueError, TypeError, AttributeError):
+                    display_date_form = "Data Inv." 
+                    display_time_form = "Hora Inv."
+        self.data_var.set(display_date_form)
+        self.horario_var.set(display_time_form) 
 
         self.entries["Valor"].insert(0, data_dict_from_controller.get("Valor", ""))
         self.entries["Serviço"].insert(0, data_dict_from_controller.get("Serviço", ""))
 
     def clear_form_fields(self):
-        for key, entry in self.entries.items():
+        for key, entry_widget in self.entries.items():
             if key == "Data":
-                self.data_var.set("") 
+                self.data_var.set("")
+            elif key == "Horário": 
+                self.horario_var.set("")
             else:
-                entry.delete(0, tk.END)
+                entry_widget.delete(0, tk.END)
         if self.entries.get("Nome"): 
             self.entries["Nome"].focus_set()
-
+    
     def clear_form(self):
         self.clear_form_fields()
         if self.tree.selection():
@@ -251,7 +291,7 @@ class MainView:
     def get_selected_item_id(self):
         try:
             selected_item = self.tree.selection()[0]
-            item_id = self.tree.item(selected_item)['values'][0]
+            item_id = self.tree.item(selected_item)['values'][0] 
             return item_id
         except IndexError:
             return None

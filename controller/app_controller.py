@@ -1,5 +1,5 @@
 import tkinter as tk
-from datetime import datetime # Adicionado import
+from datetime import datetime
 from model.database import setup_database
 from model.agendamento import AgendamentoModel, check_user
 from view.login_view import LoginView
@@ -86,15 +86,15 @@ class AppController:
         if not self.selected_id:
             return
             
-        ag_data_tuple = self.model.get_agendamento_by_id(self.selected_id) # Renomeado para clareza
+        ag_data_tuple = self.model.get_agendamento_by_id(self.selected_id)
         if ag_data_tuple:
-            # Converte a tupla (do DB) para um dicionário (para a View)
-            # A MainView.set_form_data se encarregará de formatar a data de YYYY-MM-DD para DD/MM/AAAA
+            # O controller envia o datetime string completo (YYYY-MM-DD HH:MM:SS).
+            # A MainView.set_form_data é responsável por dividir em DD/MM/AAAA e HH:MM.
             data_dict = {
                 "Nome": ag_data_tuple[1],
                 "Telefone": ag_data_tuple[2],
                 "Email": ag_data_tuple[3],
-                "Data": ag_data_tuple[4], # Mantém formato YYYY-MM-DD HH:MM:SS do DB
+                "Data": ag_data_tuple[4], # Formato YYYY-MM-DD HH:MM:SS do DB
                 "Valor": f"{ag_data_tuple[5]:.2f}", 
                 "Serviço": ag_data_tuple[6],
             }
@@ -106,47 +106,61 @@ class AppController:
             self.load_data_to_main_view() 
 
     def _validate_and_get_data(self):
-        """Valida e obtém os dados do formulário, convertendo a data para o formato do DB."""
-        form_data = self.main_view.get_form_data() # form_data["Data"] virá como DD/MM/AAAA
+        """Valida e obtém os dados do formulário, combinando data e hora para o formato do DB."""
+        form_data = self.main_view.get_form_data() # Agora retorna "Data" (DD/MM/AAAA) e "Horário" (HH:MM)
         
         # Validação básica de campos obrigatórios
-        if not form_data["Nome"] or not form_data["Serviço"]: # Data será validada abaixo
-            self.main_view.show_error("Campos Obrigatórios", "Nome e Serviço são obrigatórios.")
+        # Inclui Horário na verificação
+        if not form_data["Nome"] or not form_data["Serviço"] or \
+           not form_data["Data"] or not form_data["Horário"]:
+            self.main_view.show_error("Campos Obrigatórios", 
+                                      "Nome, Serviço, Data e Horário são obrigatórios.")
             return None
             
         try:
             valor = float(form_data["Valor"]) if form_data["Valor"] else 0.0
             form_data["Valor"] = valor 
         except ValueError:
-            self.main_view.show_error("Valor Inválido", "O valor do serviço deve ser um número (ex: 50.00).")
+            self.main_view.show_error("Valor Inválido", 
+                                      "O valor do serviço deve ser um número (ex: 50.00).")
             return None
         
-        # Validação e conversão da Data
-        date_str_ddmmyyyy = form_data["Data"] # Espera-se DD/MM/AAAA da view
-        if not date_str_ddmmyyyy:
-            self.main_view.show_error("Campo Obrigatório", "Data é obrigatória.")
-            return None
-        
+        date_str_ddmmyyyy = form_data["Data"]    # Formato DD/MM/AAAA da view
+        time_str_hhmm = form_data["Horário"]     # Formato HH:MM da view
+
         try:
-            # Valida DD/MM/AAAA e converte para objeto datetime
-            parsed_date = datetime.strptime(date_str_ddmmyyyy, "%d/%m/%Y")
-            # Converte para YYYY-MM-DD HH:MM:SS para o banco (com hora padrão 00:00:00)
-            form_data["Data"] = parsed_date.strftime("%Y-%m-%d") + " 00:00:00"
+            # Valida e parseia a data (DD/MM/AAAA)
+            parsed_date_obj = datetime.strptime(date_str_ddmmyyyy, "%d/%m/%Y")
+            # Valida e parseia a hora (HH:MM)
+            parsed_time_obj = datetime.strptime(time_str_hhmm, "%H:%M")
+            
+            # Combina o objeto date da data parseada com o objeto time da hora parseada
+            combined_datetime = datetime.combine(parsed_date_obj.date(), parsed_time_obj.time())
+            
+            # Converte para o formato do banco YYYY-MM-DD HH:MM:SS (segundos como 00)
+            form_data["Data"] = combined_datetime.strftime("%Y-%m-%d %H:%M:00") # Segundos definidos como :00
+            
+            # Remove a chave "Horário" do dicionário, pois já foi incorporada em "Data"
+            # e o Model não espera um campo "Horário" separado.
+            if "Horário" in form_data:
+                del form_data["Horário"]
+
         except ValueError:
-            self.main_view.show_error("Data Inválida",
-                                      "A data deve estar no formato DD/MM/AAAA e ser uma data válida (ex: 29/05/2025).")
+            self.main_view.show_error("Data ou Horário Inválido",
+                                      "A data deve ser DD/MM/AAAA (ex: 29/05/2025) e o horário HH:MM (ex: 14:30), ambos válidos.")
             return None
             
-        return form_data # Retorna o dicionário com dados validados e data convertida para formato DB
+        return form_data # Retorna o dicionário com dados validados e "Data" combinada
 
     def handle_add_agendamento(self):
         """Lida com a adição de um novo agendamento."""
         data_to_add = self._validate_and_get_data() 
         if data_to_add is None: return 
 
+        # data_to_add["Data"] já está no formato YYYY-MM-DD HH:MM:SS
         success = self.model.add_agendamento(
             data_to_add["Nome"], data_to_add["Telefone"], data_to_add["Email"],
-            data_to_add["Data"], data_to_add["Valor"], data_to_add["Serviço"] # "Data" já está YYYY-MM-DD HH:MM:SS
+            data_to_add["Data"], data_to_add["Valor"], data_to_add["Serviço"] 
         )
         if success:
             self.main_view.show_message("Sucesso", "Agendamento adicionado!")
@@ -163,9 +177,10 @@ class AppController:
         data_to_update = self._validate_and_get_data() 
         if data_to_update is None: return 
 
+        # data_to_update["Data"] já está no formato YYYY-MM-DD HH:MM:SS
         success = self.model.update_agendamento(
             self.selected_id, data_to_update["Nome"], data_to_update["Telefone"], data_to_update["Email"],
-            data_to_update["Data"], data_to_update["Valor"], data_to_update["Serviço"] # "Data" já está YYYY-MM-DD HH:MM:SS
+            data_to_update["Data"], data_to_update["Valor"], data_to_update["Serviço"] 
         )
         if success:
             self.main_view.show_message("Sucesso", "Agendamento atualizado!")
@@ -199,15 +214,16 @@ class AppController:
         self.report_view.show()
         self.report_view.window.lift() 
 
-    def handle_clear_form(self): # Este método pode não ser mais chamado diretamente pela view
+    def handle_clear_form(self): 
         """Lida com o botão Limpar."""
-        # A view tem seu próprio clear_form. Este método é mais para o controller resetar estado.
-        self.main_view.clear_form() # Chama o clear_form da view que reseta os botões também
+        self.main_view.clear_form() 
         self.selected_id = None
 
-    def handle_clear_form_request(self): # Chamado pela MainView
+    def handle_clear_form_request(self): 
             """Lida com a solicitação da View para limpar o formulário."""
             print("Controller: Recebido pedido para limpar formulário.")
-            # A view já limpa seus campos visuais e reseta botões via seu próprio clear_form.
-            # Aqui, o controller apenas reseta seu estado interno.
             self.selected_id = None
+            if self.main_view: 
+                self.main_view.enable_save_button(False)
+                self.main_view.enable_edit_delete_buttons(False)
+                self.main_view.add_button.config(state=tk.NORMAL)

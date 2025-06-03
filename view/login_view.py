@@ -20,7 +20,7 @@ class LoginView:
 
         # Cria uma Toplevel window para o login
         self.window = tk.Toplevel(self.master)
-        self.window.title("Login - Salão de Beleza")
+        self.window.title("Login - Salão de Beleza Neide Leila")
         self.window.geometry("300x150+500+300")      # Largura x Altura + Posição X + Posição Y
         self.window.resizable(False, False)
 

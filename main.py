@@ -9,7 +9,7 @@ if __name__ == "__main__":
     # decidirá qual view mostrar primeiro (LoginView como Toplevel)
     root.withdraw() 
 
-    # Cria uma instância do nosso AppController, passando a janela raiz
+    # Cria uma instância do AppController, passando a janela raiz
     app = AppController(root)
     
     # Chama o método que inicia a lógica da aplicação (configura DB, mostra login)
