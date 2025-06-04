@@ -1,79 +1,65 @@
 import sqlite3
-from sqlite3 import Error
+from sqlite3 import Error, OperationalError
 
 DATABASE_NAME = "database.db"
 
 def connect_db():
-    """Cria uma conexão com o banco de dados SQLite."""
+    """Cria e retorna uma conexão com o banco de dados SQLite."""
     conn = None
     try:
         conn = sqlite3.connect(DATABASE_NAME)
-        # print(f"Conexão bem-sucedida com {DATABASE_NAME}")
         return conn
-    except Error as e:
+    except OperationalError as oe: # Erro ao tentar abrir/conectar o arquivo do BD
+        print(f"Erro operacional ao conectar ao banco de dados: {oe}")
+    except Error as e: # Outros erros genéricos do sqlite3
         print(f"Erro ao conectar ao banco de dados: {e}")
     return conn
 
 def create_table(conn, create_table_sql):
-    """Cria uma tabela a partir da instrução SQL fornecida."""
+    """Executa uma instrução SQL para criar uma tabela."""
     try:
         c = conn.cursor()
         c.execute(create_table_sql)
+    except OperationalError as oe: 
+        print(f"Erro operacional ao criar tabela: {oe}")
     except Error as e:
         print(f"Erro ao criar tabela: {e}")
 
 def setup_database():
-    """
-    Configura o banco de dados: cria a conexão e as tabelas necessárias
-    (agendamentos e usuarios) caso elas não existirem.
-    """
-    
-    # SQL para criar a tabela de agendamentos (clientes agendados)
+    """Configura o banco de dados inicial, criando as tabelas se não existirem."""
     sql_create_agendamentos_table = """
     CREATE TABLE IF NOT EXISTS agendamentos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nome TEXT NOT NULL,
         telefone TEXT,
         email TEXT,
-        data TEXT NOT NULL,          -- Formato sugerido: 'YYYY-MM-DD HH:MM'
-        valor_servico REAL,          -- Usar REAL para valores monetários
+        data TEXT NOT NULL,
+        valor_servico REAL,
         servico TEXT NOT NULL
     );
     """
 
-    # SQL para criar a tabela de usuários (para login simples)
     sql_create_usuarios_table = """
     CREATE TABLE IF NOT EXISTS usuarios (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL
     );
     """
 
-    # SQL para inserir um usuário padrão (se não existir)
-    sql_insert_default_user = """
-    INSERT OR IGNORE INTO usuarios (username) VALUES ('neide');
-    """
-
-    # Cria a conexão com o banco
     conn = connect_db()
 
-    # Cria as tabelas se a conexão foi bem-sucedida
     if conn is not None:
-        print("Criando/Verificando tabelas...")
-        create_table(conn, sql_create_agendamentos_table)
-        create_table(conn, sql_create_usuarios_table)
-        
-        # Insere o usuário padrão
         try:
-            c = conn.cursor()
-            c.execute(sql_insert_default_user)
+            print("Criando/Verificando tabelas...")
+            create_table(conn, sql_create_agendamentos_table)
+            create_table(conn, sql_create_usuarios_table)
             conn.commit()
-            print("Usuário padrão 'admin' garantido.")
+            print("Configuração do banco de dados concluída.")
         except Error as e:
-            print(f"Erro ao inserir usuário padrão: {e}")
-
-        # Fecha a conexão
-        conn.close()
-        print("Configuração do banco de dados concluída.")
+            print(f"Erro durante o setup do banco de dados: {e}")
+        finally:
+            conn.close()
     else:
-        print("Erro! Não foi possível criar uma conexão com o banco de dados.")
+        print("Erro! Não foi possível criar uma conexão com o banco de dados para o setup.")
